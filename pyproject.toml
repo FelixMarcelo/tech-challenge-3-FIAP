@@ -21,6 +21,7 @@ scikit-learn = "^1.5.2"
 selenium = "^4.25.0"
 webdriver-manager = "^4.0.2"
 pytrends = "^4.9.2"
+streamlit = "^1.38.0"
 
 
 [build-system]
