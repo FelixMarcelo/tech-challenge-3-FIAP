@@ -9,14 +9,14 @@ import plotly.graph_objects as go
 # AI
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.utils import resample
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
 # Google API
 from pytrends.request import TrendReq
 
 class Data_service():
-    def get_data(self, ticker: str, initial_date: str, final_date: str, n_days_target: int):
+    def get_data(self, ticker: str, initial_date: str, final_date: str, n_days_target: int, param_return: bool = False, wanted_pct_change: float = 0.05):
         # Make connection
         pytrends = TrendReq(hl='en-US', tz=360)
 
@@ -44,12 +44,11 @@ class Data_service():
                                                             df_trends[df_trends.index == i]['qtd_shifted'], historical_with_trends['trend_count'])
             
         # Creating Predictive Variables
-        wanted_pct_change = 0.05
         historical_with_trends_return = historical_with_trends.copy()
 
         # target variable
-        historical_with_trends_return['target'] = historical_with_trends_return['Close'].pct_change(n_days_target).shift(-n_days_target)
-        historical_with_trends_return['target_cat'] = np.where(historical_with_trends_return['target'] >= wanted_pct_change, 1, 0)
+        historical_with_trends_return['return_target'] = historical_with_trends_return['Close'].pct_change(n_days_target).shift(-n_days_target)
+        historical_with_trends_return['target_cat'] = np.where(historical_with_trends_return['return_target'] >= wanted_pct_change, 1, 0)
         # direction 
         historical_with_trends_return['dir_D'] = np.where(historical_with_trends_return['Close'] > historical_with_trends_return['Open'], 1, 0)
         historical_with_trends_return['dir_D1'] = historical_with_trends_return['dir_D'].shift(1)
@@ -67,7 +66,13 @@ class Data_service():
         historical_with_trends_return['trend_count_std'] = (historical_with_trends_return['trend_count'] - mean) / std
         
         # choose variables
-        df = historical_with_trends_return[['dir_D1', 'dir_D2', 'dir_D3', 'dir_D4', 'dir_D5', 'dir_D_mean', 'trend_count_std', 'target_cat']]
+        if param_return == False:
+            # df = historical_with_trends_return[['dir_D1', 'dir_D2', 'dir_D3', 'dir_D4', 'dir_D5', 'dir_D_mean', 'trend_count_std', 'target_cat']]
+            df = historical_with_trends_return[['dir_D_mean', 'trend_count_std', 'target_cat']]
+        else:
+            # df = historical_with_trends_return[['dir_D1', 'dir_D2', 'dir_D3', 'dir_D4', 'dir_D5', 'dir_D_mean', 'trend_count_std', 'return_target', 'target_cat']]
+            df = historical_with_trends_return[['dir_D_mean', 'trend_count_std', 'return_target', 'target_cat']]
+            
         df_filtered = df.dropna(axis=0)
         df2 = df_filtered.copy()
         
@@ -76,7 +81,7 @@ class Data_service():
         df_majority = df2[df2['target_cat'] == 0]
 
         df_majority_undersampled = resample(df_majority, 
-                                            replace=False,
+                                            replace=True,
                                             n_samples=len(df_minority),
                                             random_state=42)
 
@@ -98,17 +103,19 @@ class Data_service():
         
         if (use_grid_search == False):       
             # Create a RandomForestClassifier instance
-            rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+            # rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+            
+            gb_classifier = GradientBoostingClassifier(learning_rate=0.2, n_estimators=300, random_state=42)
 
             # Train the model on the training set
-            rf_classifier.fit(X_train, y_train)
+            gb_classifier.fit(X_train, y_train)
 
             # Make predictions on the test set
-            y_pred = rf_classifier.predict(X_test)
+            y_pred = gb_classifier.predict(X_test)
             
-            rf_classifier           
+            gb_classifier           
             
-            return rf_classifier, accuracy_score(y_test, y_pred)
+            return gb_classifier, accuracy_score(y_test, y_pred)
         
         else:
             # Trying with grid search
